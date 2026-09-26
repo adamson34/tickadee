@@ -22,7 +22,8 @@ phase). `main` is only updated for releases, starting with v1
 - [x] Headless `--score` to script a scoring alert
 - [x] Measured on a real Raspberry Pi 4 (2026-09-24): about 22 to 28 fps at 1080p, about 9 at 4K (the Pi image's 4K TVs get 1080p)
 - [ ] 60 fps on a Pi 4 (the LED glow passes are the cost), and a release check on real hardware
-- [ ] Render at 1080p on 4K screens automatically (scaled up by the GPU), on any install, not only the Pi image
+- [x] Render at 1080p on 4K screens automatically (scaled up by the GPU), on any install; a Resolution and frame-rate choice on the admin page
+- [x] Switch the TV's own output mode to match (a small helper outside the snap, `packaging/tv-output/`, set up by the installer and the Pi image)
 
 ## Phase 2: live data ✅
 

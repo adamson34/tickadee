@@ -14,6 +14,7 @@ use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::render::{self, Renderer};
 use crate::scene::{FeedSource, Scene, SceneSetup};
+use crate::upscale::{Upscaler, render_size};
 use crate::watchdog::{self, Heartbeat};
 
 pub fn run(config: DisplayConfig, size: (u32, u32), fullscreen: bool, source: FeedSource) -> render::Result<()> {
@@ -53,6 +54,12 @@ struct State {
     scene: Scene,
     last_frame: Instant,
     stats: FrameStats,
+    /// Draws below the screen's resolution and scales up (see upscale).
+    upscaler: Upscaler,
+    /// The size the scene draws at (the screen's, or smaller).
+    render_size: (u32, u32),
+    /// The resolution setting `render_size` was worked out for.
+    resolution: marqueet_core::config::Resolution,
 }
 
 /// Logs frame rate and CPU time per frame every few seconds, to spot
@@ -112,10 +119,13 @@ impl App {
         surface.configure(&device, &surface_config);
 
         let renderer = Renderer::new(&device, surface_config.format);
+        let upscaler = Upscaler::new(&device, surface_config.format);
+        let resolution = self.config.resolution;
+        let render = render_size((surface_config.width, surface_config.height), resolution.max_height());
         let scene = Scene::new(
             self.config.clone(),
-            surface_config.width,
-            surface_config.height,
+            render.0,
+            render.1,
             SceneSetup {
                 now: Utc::now(),
                 tz: *Local::now().offset(),
@@ -124,7 +134,21 @@ impl App {
             },
         );
         let stats = FrameStats { since: Instant::now(), frames: 0, busy: Default::default() };
-        Ok(State { window, surface, surface_config, device, queue, renderer, scene, last_frame: Instant::now(), stats })
+        log::info!("screen {}x{}, drawing at {}x{}", surface_config.width, surface_config.height, render.0, render.1);
+        Ok(State {
+            window,
+            surface,
+            surface_config,
+            device,
+            queue,
+            renderer,
+            scene,
+            last_frame: Instant::now(),
+            stats,
+            upscaler,
+            render_size: render,
+            resolution,
+        })
     }
 }
 
@@ -136,7 +160,25 @@ impl State {
         self.surface_config.width = w;
         self.surface_config.height = h;
         self.surface.configure(&self.device, &self.surface_config);
-        self.scene.resize(w, h, Utc::now());
+        self.fit_render_size();
+    }
+
+    /// Works out the drawing size for the screen and the resolution
+    /// setting, and lays the scene out again when it changes.
+    fn fit_render_size(&mut self) {
+        self.resolution = self.scene.config.resolution;
+        let screen = (self.surface_config.width, self.surface_config.height);
+        let size = render_size(screen, self.resolution.max_height());
+        if size != self.render_size {
+            log::info!("screen {}x{}, drawing at {}x{}", screen.0, screen.1, size.0, size.1);
+        }
+        self.render_size = size;
+        self.scene.resize(size.0, size.1, Utc::now());
+    }
+
+    /// Shortest time between frames for the frame-rate setting.
+    fn frame_interval(&self) -> std::time::Duration {
+        std::time::Duration::from_secs_f64(1.0 / f64::from(self.scene.config.max_fps.max(1)))
     }
 
     fn frame(&mut self) {
@@ -159,7 +201,13 @@ impl State {
             }
         };
         let view = frame.texture.create_view(&Default::default());
-        self.renderer.render(&self.device, &self.queue, &mut self.scene, &view);
+        if self.render_size == (self.surface_config.width, self.surface_config.height) {
+            self.renderer.render(&self.device, &self.queue, &mut self.scene, &view);
+        } else {
+            let target = self.upscaler.target(&self.device, self.render_size);
+            self.renderer.render(&self.device, &self.queue, &mut self.scene, target);
+            self.upscaler.draw(&self.device, &self.queue, &view);
+        }
         self.stats.record(now.elapsed());
         self.window.pre_present_notify();
         self.queue.present(frame);
@@ -209,6 +257,16 @@ impl ApplicationHandler for App {
             },
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
+                // The resolution setting changed (from the server): lay out
+                // again at the new size.
+                if state.scene.config.resolution != state.resolution {
+                    state.fit_render_size();
+                }
+                // Hold to the frame-rate setting (30 keeps a Pi cooler).
+                let wait = state.frame_interval().saturating_sub(state.last_frame.elapsed());
+                if wait > std::time::Duration::from_millis(1) {
+                    std::thread::sleep(wait);
+                }
                 state.frame();
                 state.window.request_redraw();
             }

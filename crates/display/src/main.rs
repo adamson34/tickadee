@@ -23,6 +23,7 @@ mod setup;
 mod takeover;
 mod theme;
 mod ui;
+mod upscale;
 mod watchdog;
 mod weather;
 mod widgets;

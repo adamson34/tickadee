@@ -82,6 +82,86 @@ impl WidgetLayout {
     }
 }
 
+/// The resolution the display draws at.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Resolution {
+    /// The screen's own, but no more than 1080p (4K TVs get 1080p).
+    #[default]
+    Auto,
+    /// The screen's own, whatever it is.
+    Native,
+    #[serde(rename = "2160p")]
+    P2160,
+    #[serde(rename = "1440p")]
+    P1440,
+    #[serde(rename = "1080p")]
+    P1080,
+    #[serde(rename = "720p")]
+    P720,
+}
+
+impl Resolution {
+    pub const ALL: [Resolution; 6] = [
+        Resolution::Auto,
+        Resolution::P2160,
+        Resolution::P1440,
+        Resolution::P1080,
+        Resolution::P720,
+        Resolution::Native,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Resolution::Auto => "auto",
+            Resolution::Native => "native",
+            Resolution::P2160 => "2160p",
+            Resolution::P1440 => "1440p",
+            Resolution::P1080 => "1080p",
+            Resolution::P720 => "720p",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Resolution::Auto => "Automatic (1080p on a 4K TV)",
+            Resolution::Native => "The screen's own",
+            Resolution::P2160 => "4K (2160p)",
+            Resolution::P1440 => "1440p",
+            Resolution::P1080 => "1080p",
+            Resolution::P720 => "720p",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Resolution> {
+        Self::ALL.into_iter().find(|r| r.id() == id)
+    }
+
+    /// The TV output mode to ask the screen manager for: "1920x1080@60",
+    /// or "native" for the screen's own. Automatic asks for 1080p.
+    pub fn tv_mode(self, max_fps: u16) -> String {
+        let size = match self {
+            Resolution::Native => return "native".into(),
+            Resolution::P2160 => "3840x2160",
+            Resolution::P1440 => "2560x1440",
+            Resolution::Auto | Resolution::P1080 => "1920x1080",
+            Resolution::P720 => "1280x720",
+        };
+        format!("{size}@{max_fps}")
+    }
+
+    /// The tallest drawing height, or `None` for the screen's own.
+    pub fn max_height(self) -> Option<u32> {
+        match self {
+            Resolution::Auto | Resolution::P1080 => Some(1080),
+            Resolution::Native => None,
+            Resolution::P2160 => Some(2160),
+            Resolution::P1440 => Some(1440),
+            Resolution::P720 => Some(720),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DisplayConfig {
@@ -111,6 +191,12 @@ pub struct DisplayConfig {
     pub dot_size: f32,
     /// How the widget area is split.
     pub widget_layout: WidgetLayout,
+    /// The resolution to draw at; lower than the screen's is scaled up
+    /// (a Pi 4 can't fill 4K smoothly).
+    pub resolution: Resolution,
+    /// Frames per second at most: 60 for the smoothest scrolling, 30 to
+    /// keep a Pi cooler.
+    pub max_fps: u16,
     /// How the crawl and widgets look.
     pub theme: Theme,
 }
@@ -131,6 +217,8 @@ impl Default for DisplayConfig {
             flicker: 0.25,
             dot_size: 0.78,
             widget_layout: WidgetLayout::default(),
+            resolution: Resolution::default(),
+            max_fps: 60,
             theme: Theme::default(),
         }
     }
@@ -151,6 +239,7 @@ impl DisplayConfig {
         self.glow = clamp(self.glow, 0.0, 2.0, d.glow);
         self.flicker = clamp(self.flicker, 0.0, 1.0, d.flicker);
         self.dot_size = clamp(self.dot_size, 0.3, 1.0, d.dot_size);
+        self.max_fps = if self.max_fps <= 30 { 30 } else { 60 };
         self
     }
 }
@@ -162,6 +251,20 @@ mod tests {
     #[test]
     fn defaults_are_already_sane() {
         assert_eq!(DisplayConfig::default().sanitized(), DisplayConfig::default());
+    }
+
+    #[test]
+    fn resolution_and_frame_rate_settings() {
+        for r in Resolution::ALL {
+            assert_eq!(Resolution::from_id(r.id()), Some(r));
+        }
+        assert_eq!(Resolution::default().max_height(), Some(1080), "4K TVs draw at 1080p unless told otherwise");
+        assert_eq!(Resolution::Native.max_height(), None);
+        let c = DisplayConfig { max_fps: 45, ..Default::default() }.sanitized();
+        assert_eq!(c.max_fps, 60, "only 30 or 60");
+        assert_eq!(DisplayConfig { max_fps: 0, ..Default::default() }.sanitized().max_fps, 30);
+        let old: DisplayConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!((old.resolution, old.max_fps), (Resolution::Auto, 60), "saved before these existed");
     }
 
     #[test]

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main, dev]
-    paths: ["packaging/pi-image/**", "install.sh", ".github/workflows/pi-image.yml"]
+    paths: ["packaging/pi-image/**", "packaging/tv-output/**", "install.sh", ".github/workflows/pi-image.yml"]
 
 permissions:
   contents: read
@@ -21,7 +21,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Check the scripts and cloud-init config
         run: |
-          shellcheck install.sh packaging/pi-image/build.sh packaging/pi-image/firstboot.sh packaging/pi-image/devssh.sh
+          shellcheck install.sh packaging/pi-image/build.sh packaging/pi-image/firstboot.sh packaging/pi-image/devssh.sh \
+            packaging/tv-output/marqueet-tv-output.sh packaging/tv-output/test.sh
+          sh packaging/tv-output/test.sh
           for f in packaging/pi-image/*.service packaging/pi-image/*.timer packaging/pi-image/*.path; do
             systemd-analyze verify --man=no "$f" 2>&1 | grep -v "Command /bin/sh.*is not executable\|Failed to prepare" || true
           done

@@ -88,6 +88,8 @@ pub struct View<'a> {
     pub team_art: &'a TeamArtMap,
     /// Today's games, for "watch a game": (id, "NFL · KC at BUF · Q3 4:26").
     pub games: &'a [(GameId, String)],
+    /// What the TV output helper last applied, when it's installed.
+    pub tv_output: Option<&'a crate::tv_output::Status>,
     /// Teams playing today, favorites first, for test takeovers:
     /// (id, "NFL · Buffalo Blizzard").
     pub playing: &'a [(marqueet_core::sports::TeamId, String)],
@@ -579,6 +581,11 @@ pub fn render(v: &View<'_>) -> String {
          </div><div class=\"choices inline\">\
          <label><input type=\"radio\" name=\"scroll_mode\" value=\"stepped\"{}> Stepped (like a real sign)</label>\
          <label><input type=\"radio\" name=\"scroll_mode\" value=\"smooth\"{}> Smooth</label></div>\
+         <h3>Screen</h3><div class=\"row\"><label>Resolution <select name=\"resolution\" aria-label=\"Resolution\">{}</select>\
+         </label><label><input type=\"radio\" name=\"max_fps\" value=\"60\"{}> 60 frames a second (smoothest)</label>\
+         <label><input type=\"radio\" name=\"max_fps\" value=\"30\"{}> 30 (cooler)</label></div>\
+         <p class=\"hint\">A Raspberry Pi 4 can't fill a 4K TV smoothly: Automatic draws at 1080p and scales it up. \
+         Pick a lower resolution if scrolling stutters.</p>{}\
          <div class=\"choices\"><label><input type=\"checkbox\" name=\"show_odds\"{}> Show betting lines (the spread \
          and over/under, like a broadcast)</label></div><p class=\"hint\">Off by default. For information only: \
          with upcoming games in the crawl and in the spotlight. Marqueet doesn't link to sportsbooks or take \
@@ -592,6 +599,29 @@ pub fn render(v: &View<'_>) -> String {
         d.flicker,
         checked(d.scroll_mode == ScrollMode::Stepped),
         checked(d.scroll_mode == ScrollMode::Smooth),
+        marqueet_core::config::Resolution::ALL
+            .iter()
+            .map(|r| format!("<option value=\"{}\"{}>{}</option>", r.id(), selected(*r == d.resolution), r.label()))
+            .collect::<String>(),
+        checked(d.max_fps >= 60),
+        checked(d.max_fps < 60),
+        match v.tv_output {
+            Some(t) => {
+                let mut sizes: Vec<String> = Vec::new();
+                for m in &t.modes {
+                    let d = crate::tv_output::describe(m);
+                    if !sizes.contains(&d) {
+                        sizes.push(d);
+                    }
+                }
+                format!(
+                    "<p class=\"hint\">Your TV is getting {}. It offers: {}.</p>",
+                    esc(&crate::tv_output::describe(&t.applied)),
+                    esc(&sizes.join(", "))
+                )
+            }
+            None => String::new(),
+        },
         checked(s.show_odds),
     );
 
@@ -970,6 +1000,7 @@ mod tests {
             team_art: &NO_ART,
             games: &[],
             playing: &[],
+            tv_output: None,
             host: "marqueet.local:7878",
             notice: Notice::None,
             remote: false,
