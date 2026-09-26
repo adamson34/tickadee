@@ -20,6 +20,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Screen** settings on the admin page (Display): a **Resolution** to
+  draw at (Automatic, 4K, 1440p, 1080p, 720p or the screen's own) and a
+  frame rate (60, or 30 to keep a Pi cooler). Automatic draws at 1080p on
+  a 4K TV and scales it up, so a Pi 4 on a 4K TV is smooth out of the box
+  (it managed about 5 frames a second drawing 4K).
+- The TV's own output mode follows that setting, where the installer set
+  Marqueet up with Ubuntu Frame (the Pi image, the one-command installer):
+  a small helper outside the snap (`packaging/tv-output/`) picks the closest
+  mode the TV offers, for example 1080p at 60 Hz instead of 4K at 30, and
+  the admin page shows what the TV is getting and what it offers.
 - LED art can go **in the background**: big and dimmed behind the words
   for the whole takeover (kept out of the score box so it reads). The
   preview option is now `--art-placement above|intro|behind`.

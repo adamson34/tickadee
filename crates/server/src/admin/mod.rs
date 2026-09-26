@@ -227,6 +227,7 @@ fn render(
                 })
                 .collect::<Vec<_>>()
         }),
+        tv_output: crate::tv_output::status().as_ref(),
         playing: &hub.with_store(|store| {
             let mut teams: Vec<(marqueet_core::sports::TeamId, String)> = Vec::new();
             for g in store.games() {

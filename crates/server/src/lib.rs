@@ -23,6 +23,7 @@ pub mod schedule;
 pub mod settings_store;
 pub mod store;
 pub mod team_art;
+pub mod tv_output;
 pub mod tz;
 pub mod web;
 

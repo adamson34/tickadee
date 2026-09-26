@@ -1,0 +1,10 @@
+[Unit]
+Description=Set the TV output mode Marqueet asks for (Ubuntu Frame)
+After=snap.ubuntu-frame.daemon.service snap.marqueet.server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/marqueet/marqueet-tv-output.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -343,6 +343,7 @@ impl Hub {
     /// A hub following `settings`. With `db`, setting changes are saved.
     pub fn new(settings: Settings, policy: Policy, db: Option<SettingsStore>) -> Arc<Hub> {
         let settings = settings.sanitized();
+        crate::tv_output::request(&settings.display);
         let store = Store::new(settings.leagues.clone(), policy.stale_after_failures);
         let own_art = db.as_ref().and_then(|d| d.team_art().ok()).unwrap_or_default();
         let cached = db.as_ref().and_then(|d| d.provider_logos().ok()).unwrap_or_default();
@@ -728,6 +729,7 @@ impl Hub {
             self.publish(&store);
         }
         self.refresh_display();
+        crate::tv_output::request(&settings.display);
         self.sync_pollers();
         self.wake.notify_one();
         log::info!(

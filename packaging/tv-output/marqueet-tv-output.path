@@ -1,0 +1,8 @@
+[Unit]
+Description=Set the TV output mode when Marqueet asks for another
+
+[Path]
+PathChanged=/var/snap/marqueet/common/tv-output
+
+[Install]
+WantedBy=multi-user.target
